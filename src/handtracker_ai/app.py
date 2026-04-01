@@ -43,9 +43,27 @@ TUTORIAL_STEPS = [
     },
     {
         "title": "Управление системой",
-        "subtitle": "Свайпы, кулак, громкость",
-        "body": "Свайпы переключают рабочие столы, кулак ставит медиа на паузу, поднятый большой палец увеличивает громкость.",
+        "subtitle": "Свайпы и кулак",
+        "body": "Свайпы переключают рабочие столы, а кулак ставит медиа на паузу или снимает с паузы.",
         "image": ASSETS_DIR / "swape.png",
+    },
+    {
+        "title": "Громкость вниз",
+        "subtitle": "Thumbs down",
+        "body": "Опустите большой палец вниз, держа остальные пальцы собранными. Когда жест распознан, приложение уменьшает системную громкость.",
+        "image": ASSETS_DIR / "volumedown.png",
+    },
+    {
+        "title": "Прокрутка вверх",
+        "subtitle": "Два пальца вверх",
+        "body": "Поднимите указательный и средний пальцы и сделайте короткое движение рукой вверх. Это запускает прокрутку страницы вверх.",
+        "image": ASSETS_DIR / "twofingersup.png",
+    },
+    {
+        "title": "Прокрутка вниз",
+        "subtitle": "Два пальца вниз",
+        "body": "С тем же положением двух пальцев сделайте короткое движение рукой вниз. Это запускает прокрутку страницы вниз.",
+        "image": ASSETS_DIR / "twofingersdown.png",
     },
 ]
 
@@ -64,7 +82,8 @@ class GestureControlApp:
 
         self._tracker = HandTracker(self.config)
         self._actions = ActionController(
-            cooldown_seconds=self.config.gesture.command_cooldown_seconds
+            cooldown_seconds=self.config.gesture.command_cooldown_seconds,
+            shutdown_hold_seconds=self.config.gesture.shutdown_hold_seconds,
         )
 
         self._image_handle = None
@@ -731,6 +750,7 @@ class GestureControlApp:
 
                 if self._active.get():
                     if prediction.gesture == "open_palm":
+                        self._actions.reset_pending()
                         pointer = self._tracker.pointer_target(frame_result)
                         if pointer is not None:
                             self._actions.move_pointer(pointer[0], pointer[1])
@@ -738,13 +758,16 @@ class GestureControlApp:
                     elif self._actions.trigger(prediction.gesture):
                         self._last_action.set(prediction.gesture)
                 else:
+                    self._actions.reset_pending()
                     self._last_action.set("предпросмотр")
             elif tracking_enabled:
+                self._actions.reset_pending()
                 self._last_gesture.set("нет")
                 self._confidence.set("0%")
                 self._hand_state.set("рука не найдена")
                 self._pointer_state.set("курсор неактивен")
             else:
+                self._actions.reset_pending()
                 self._last_gesture.set("нет")
                 self._confidence.set("0%")
                 self._hand_state.set("трекинг выключен")

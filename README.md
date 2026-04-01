@@ -72,3 +72,4 @@ PYTHONPATH=src python -m handtracker_ai.main
 5. TensorRT: <https://developer.nvidia.com/tensorrt>
 6. Jetson SDK: <https://developer.nvidia.com/embedded/jetson>
 7. OpenCV: <https://opencv.org>
+  

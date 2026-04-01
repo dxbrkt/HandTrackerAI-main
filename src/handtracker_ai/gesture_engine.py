@@ -32,10 +32,11 @@ class GestureEngine:
         wrist_x, wrist_y, _ = coords[0]
         self._wrist_history.append((wrist_x, wrist_y))
 
-        extended_fingers = self._count_extended_fingers(coords)
+        finger_states = self._finger_states(coords)
+        extended_fingers = self._count_extended_fingers(finger_states)
         pinch_distance = self._distance(coords[4], coords[8])
 
-        dynamic_prediction = self._classify_dynamic_gesture()
+        dynamic_prediction = self._classify_dynamic_gesture(finger_states)
         if dynamic_prediction is not None:
             return dynamic_prediction
 
@@ -49,11 +50,26 @@ class GestureEngine:
                 debug={"extended_fingers": extended_fingers},
             )
 
-        thumb_up = self._is_thumbs_up(coords, extended_fingers)
-        if thumb_up:
+        if self._is_thumbs_up(coords, extended_fingers, finger_states):
             return GesturePrediction(
                 gesture="thumbs_up",
                 confidence=0.84,
+                is_dynamic=False,
+                debug={"extended_fingers": extended_fingers},
+            )
+
+        if self._is_thumbs_down(coords, extended_fingers, finger_states):
+            return GesturePrediction(
+                gesture="thumbs_down",
+                confidence=0.84,
+                is_dynamic=False,
+                debug={"extended_fingers": extended_fingers},
+            )
+
+        if self._is_middle_finger(finger_states):
+            return GesturePrediction(
+                gesture="middle_finger",
+                confidence=0.9,
                 is_dynamic=False,
                 debug={"extended_fingers": extended_fingers},
             )
@@ -97,13 +113,35 @@ class GestureEngine:
         self._smoothed_pointer = (smooth_x, smooth_y)
         return self._smoothed_pointer
 
-    def _classify_dynamic_gesture(self) -> GesturePrediction | None:
+    def _classify_dynamic_gesture(
+        self,
+        finger_states: dict[str, bool],
+    ) -> GesturePrediction | None:
         if len(self._wrist_history) < self.config.dynamic_history_size:
             return None
 
-        start_x, _ = self._wrist_history[0]
-        end_x, _ = self._wrist_history[-1]
+        start_x, start_y = self._wrist_history[0]
+        end_x, end_y = self._wrist_history[-1]
         delta_x = end_x - start_x
+        delta_y = end_y - start_y
+
+        if self._is_two_finger_pose(finger_states):
+            if delta_y <= -self.config.scroll_distance_threshold:
+                self._wrist_history.clear()
+                return GesturePrediction(
+                    gesture="two_fingers_up",
+                    confidence=min(0.95, abs(delta_y) * 3.0),
+                    is_dynamic=True,
+                    debug={"delta_y": delta_y},
+                )
+            if delta_y >= self.config.scroll_distance_threshold:
+                self._wrist_history.clear()
+                return GesturePrediction(
+                    gesture="two_fingers_down",
+                    confidence=min(0.95, abs(delta_y) * 3.0),
+                    is_dynamic=True,
+                    debug={"delta_y": delta_y},
+                )
 
         if delta_x <= -self.config.swipe_distance_threshold:
             self._wrist_history.clear()
@@ -123,30 +161,75 @@ class GestureEngine:
             )
         return None
 
-    def _count_extended_fingers(self, coords: list[tuple[float, float, float]]) -> int:
-        count = 0
-        for tip_idx, pip_idx in zip(FINGER_TIPS, FINGER_PIPS):
-            if coords[tip_idx][1] < coords[pip_idx][1]:
-                count += 1
+    def _finger_states(
+        self, coords: list[tuple[float, float, float]]
+    ) -> dict[str, bool]:
+        states = {
+            "index": coords[8][1] < coords[6][1],
+            "middle": coords[12][1] < coords[10][1],
+            "ring": coords[16][1] < coords[14][1],
+            "pinky": coords[20][1] < coords[18][1],
+        }
+        states["thumb"] = abs(coords[4][0] - coords[3][0]) > 0.04
+        return states
 
-        thumb_tip_x = coords[4][0]
-        thumb_ip_x = coords[3][0]
-        if abs(thumb_tip_x - thumb_ip_x) > 0.04:
-            count += 1
-        return count
+    def _count_extended_fingers(self, finger_states: dict[str, bool]) -> int:
+        return sum(1 for is_extended in finger_states.values() if is_extended)
 
     def _is_thumbs_up(
-        self, coords: list[tuple[float, float, float]], extended_fingers: int
+        self,
+        coords: list[tuple[float, float, float]],
+        extended_fingers: int,
+        finger_states: dict[str, bool],
     ) -> bool:
         thumb_tip = coords[4]
         thumb_mcp = coords[2]
-        other_fingers_curled = all(
-            coords[tip][1] > coords[pip][1] for tip, pip in zip(FINGER_TIPS, FINGER_PIPS)
+        other_fingers_curled = not any(
+            finger_states[name] for name in ("index", "middle", "ring", "pinky")
         )
         return (
             extended_fingers <= 2
+            and finger_states["thumb"]
             and thumb_tip[1] < thumb_mcp[1] - 0.12
             and other_fingers_curled
+        )
+
+    def _is_thumbs_down(
+        self,
+        coords: list[tuple[float, float, float]],
+        extended_fingers: int,
+        finger_states: dict[str, bool],
+    ) -> bool:
+        thumb_tip = coords[4]
+        thumb_mcp = coords[2]
+        other_fingers_curled = not any(
+            finger_states[name] for name in ("index", "middle", "ring", "pinky")
+        )
+        return (
+            extended_fingers <= 2
+            and finger_states["thumb"]
+            and thumb_tip[1] > thumb_mcp[1] + 0.12
+            and other_fingers_curled
+        )
+
+    @staticmethod
+    def _is_two_finger_pose(finger_states: dict[str, bool]) -> bool:
+        return (
+            finger_states["index"]
+            and finger_states["middle"]
+            and not finger_states["ring"]
+            and not finger_states["pinky"]
+            and not finger_states["thumb"]
+        )
+
+    @staticmethod
+    def _is_middle_finger(finger_states: dict[str, bool]) -> bool:
+        return (
+            finger_states["middle"]
+            and not finger_states["index"]
+            and not finger_states["ring"]
+            and not finger_states["pinky"]
+            and not finger_states["thumb"]
         )
 
     @staticmethod
