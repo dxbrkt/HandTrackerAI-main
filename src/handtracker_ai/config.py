@@ -18,11 +18,17 @@ class GestureConfig:
     pinch_threshold: float = 0.055
     open_palm_threshold: int = 4
     fist_threshold: int = 1
+    static_gesture_frames: int = 3
+    fist_gesture_frames: int = 4
     swipe_distance_threshold: float = 0.18
     scroll_distance_threshold: float = 0.12
+    scroll_history_size: int = 3
+    thumb_scroll_distance_threshold: float = 0.055
+    thumb_scroll_history_size: int = 3
     command_cooldown_seconds: float = 0.85
     shutdown_hold_seconds: float = 2.5
     pointer_smoothing: float = 0.35
+    pointer_speed_multiplier: float = 1.75
     dynamic_history_size: int = 8
 
 

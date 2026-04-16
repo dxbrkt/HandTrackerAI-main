@@ -2,3 +2,7 @@ venv/
 .venv311/
 __pycache__/
 *.pyc
+.DS_Store
+build/
+dist/
+.build-cache/

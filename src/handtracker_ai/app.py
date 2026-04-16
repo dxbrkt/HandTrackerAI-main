@@ -5,7 +5,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 import cv2
-from PIL import Image, ImageSequence, ImageTk
+from PIL import Image, ImageTk
 
 from .action_controller import ActionController
 from .config import AppConfig
@@ -13,7 +13,6 @@ from .hand_tracker import HandTracker
 
 
 ASSETS_DIR = Path(__file__).resolve().parent / "pngfortutor"
-WELCOME_GIF = Path("/Users/sb/Desktop/13321.gif")
 
 PALETTE = {
     "bg": "#050505",
@@ -87,9 +86,6 @@ class GestureControlApp:
         )
 
         self._image_handle = None
-        self._gif_frames: list[ImageTk.PhotoImage] = []
-        self._gif_index = 0
-        self._gif_job: str | None = None
         self._tutorial_index = 0
         self._tutorial_images: dict[Path, ctk.CTkImage] = {}
 
@@ -314,18 +310,22 @@ class GestureControlApp:
 
         ctk.CTkLabel(
             right,
-            text="Анимация входа",
+            text="Быстрый старт",
             text_color=PALETTE["text"],
             font=ctk.CTkFont(size=18, weight="bold"),
         ).grid(row=0, column=0, sticky="w", padx=22, pady=(22, 10))
 
-        self.welcome_gif_label = tk.Label(
+        ctk.CTkLabel(
             right,
-            bg=PALETTE["panel"],
-            bd=0,
-            relief="flat",
-        )
-        self.welcome_gif_label.grid(row=1, column=0, sticky="nsew", padx=22, pady=(0, 22))
+            text=(
+                "Перейдите в обучение, чтобы посмотреть все доступные жесты,"
+                " а затем откройте панель и включите управление."
+            ),
+            text_color=PALETTE["muted"],
+            justify="left",
+            wraplength=420,
+            font=ctk.CTkFont(size=15),
+        ).grid(row=1, column=0, sticky="nw", padx=22, pady=(0, 22))
 
     def _build_tutorial_page(self) -> None:
         page = ctk.CTkFrame(self.page_host, fg_color="transparent")
@@ -685,31 +685,6 @@ class GestureControlApp:
         self._tutorial_index += 1
         self._render_tutorial_step()
 
-    def _load_welcome_gif(self) -> None:
-        if not WELCOME_GIF.exists():
-            return
-        try:
-            with Image.open(WELCOME_GIF) as gif:
-                frames: list[ImageTk.PhotoImage] = []
-                for frame in ImageSequence.Iterator(gif):
-                    prepared = frame.convert("RGBA").resize((480, 300))
-                    frames.append(ImageTk.PhotoImage(prepared))
-        except OSError:
-            return
-
-        self._gif_frames = frames[::2] if len(frames) > 1 else frames
-        if self._gif_frames:
-            self._animate_welcome_gif()
-
-    def _animate_welcome_gif(self) -> None:
-        if not self._gif_frames:
-            return
-        frame = self._gif_frames[self._gif_index]
-        self.welcome_gif_label.configure(image=frame)
-        self.welcome_gif_label.image = frame
-        self._gif_index = (self._gif_index + 1) % len(self._gif_frames)
-        self._gif_job = self.root.after(90, self._animate_welcome_gif)
-
     def _sync_control_state(self) -> None:
         if self._active.get():
             self._engine_mode.set("управление включено")
@@ -718,7 +693,6 @@ class GestureControlApp:
 
     def run(self) -> None:
         self._sync_control_state()
-        self._load_welcome_gif()
         self._tick()
         self.root.mainloop()
 
@@ -755,8 +729,10 @@ class GestureControlApp:
                         if pointer is not None:
                             self._actions.move_pointer(pointer[0], pointer[1])
                             self._last_action.set("движение курсора")
-                    elif self._actions.trigger(prediction.gesture):
-                        self._last_action.set(prediction.gesture)
+                    else:
+                        action = self._actions.trigger(prediction.gesture)
+                        if action is not None:
+                            self._last_action.set(action)
                 else:
                     self._actions.reset_pending()
                     self._last_action.set("предпросмотр")
@@ -777,7 +753,5 @@ class GestureControlApp:
         self.root.after(20, self._tick)
 
     def _on_close(self) -> None:
-        if self._gif_job is not None:
-            self.root.after_cancel(self._gif_job)
         self._tracker.close()
         self.root.destroy()

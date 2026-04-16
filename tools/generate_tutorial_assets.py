@@ -92,6 +92,23 @@ def draw_volume_icon(draw: ImageDraw.ImageDraw, center: tuple[int, int], down: b
         draw.rectangle((cx + 34, cy - 5, cx + 72, cy + 5), fill=color)
 
 
+def draw_double_click_icon(draw: ImageDraw.ImageDraw, center: tuple[int, int]) -> None:
+    cx, cy = center
+    draw.rounded_rectangle(
+        (cx - 54, cy - 42, cx + 54, cy + 42),
+        radius=20,
+        fill="#f3f5fb",
+        outline="#d2d7e5",
+        width=2,
+    )
+    draw.line((cx, cy - 32, cx, cy + 32), fill="#d2d7e5", width=2)
+    draw.rounded_rectangle((cx - 40, cy - 22, cx - 8, cy + 22), radius=12, fill="#dce2ef")
+    draw.rounded_rectangle((cx + 8, cy - 22, cx + 40, cy + 22), radius=12, fill="#dce2ef")
+    for offset in (-28, 28):
+        draw.ellipse((cx + offset - 18, cy - 68, cx + offset + 18, cy - 32), outline="#7aa2ff", width=5)
+        draw.line((cx + offset, cy - 44, cx + offset, cy - 16), fill="#7aa2ff", width=5)
+
+
 def draw_hand(draw: ImageDraw.ImageDraw, pose: str) -> None:
     skin = "#efb087"
     skin_shadow = "#db9a73"
@@ -105,6 +122,14 @@ def draw_hand(draw: ImageDraw.ImageDraw, pose: str) -> None:
         for rect in ((96, 134, 144, 238), (138, 126, 186, 222), (180, 132, 226, 226), (216, 148, 256, 234)):
             draw.rounded_rectangle(rect, radius=22, fill=skin, outline=outline, width=3)
         draw.rounded_rectangle((198, 220, 264, 346), radius=28, fill=skin, outline=outline, width=3)
+    elif pose == "double_pinch":
+        draw.rounded_rectangle((100, 176, 144, 284), radius=22, fill=skin, outline=outline, width=3)
+        draw.rounded_rectangle((142, 126, 188, 212), radius=22, fill=skin, outline=outline, width=3)
+        draw.rounded_rectangle((182, 186, 224, 248), radius=18, fill=skin, outline=outline, width=3)
+        draw.rounded_rectangle((214, 198, 252, 246), radius=18, fill=skin, outline=outline, width=3)
+        draw.rounded_rectangle((64, 196, 116, 290), radius=24, fill=skin, outline=outline, width=3)
+        draw.ellipse((116, 250, 154, 288), outline="#7aa2ff", width=5)
+        draw.ellipse((138, 218, 176, 256), outline="#7aa2ff", width=5)
     else:
         draw.rounded_rectangle((90, 112, 136, 292), radius=24, fill=skin, outline=outline, width=3)
         draw.rounded_rectangle((138, 86, 186, 274), radius=24, fill=skin, outline=outline, width=3)
@@ -127,6 +152,9 @@ def build_card(filename: str, pose: str, detail: str, caption: str) -> None:
     if pose == "thumbs_down":
         draw_hand(draw, "thumbs_down")
         draw_volume_icon(draw, (338, 150), down=True)
+    elif pose == "double_pinch":
+        draw_hand(draw, "double_pinch")
+        draw_double_click_icon(draw, (348, 152))
     else:
         draw_hand(draw, "two_fingers")
         draw_monitor(draw, (270, 58, 428, 184))
@@ -140,6 +168,7 @@ def build_card(filename: str, pose: str, detail: str, caption: str) -> None:
 
 def main() -> None:
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    build_card("doublepinch", "double_pinch", "double_pinch", "double_pinch")
     build_card("volumedown", "thumbs_down", "thumbs_down", "thumbs_down")
     build_card("twofingersup", "two_fingers_up", "two_fingers_up", "two_fingers_up")
     build_card("twofingersdown", "two_fingers_down", "two_fingers_down", "two_fingers_down")
