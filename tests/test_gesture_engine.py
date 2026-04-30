@@ -90,9 +90,32 @@ class GestureEngineTests(unittest.TestCase):
         self.assertIsNotNone(first_prediction)
         self.assertIsNotNone(second_prediction)
         self.assertIsNotNone(third_prediction)
-        self.assertEqual(first_prediction.gesture, "neutral")
-        self.assertEqual(second_prediction.gesture, "neutral")
+        self.assertEqual(first_prediction.gesture, "thumbs_down")
+        self.assertEqual(first_prediction.state, "gesture_started")
+        self.assertFalse(first_prediction.emit_action)
+        self.assertEqual(second_prediction.gesture, "thumbs_down")
+        self.assertEqual(second_prediction.state, "gesture_started")
+        self.assertFalse(second_prediction.emit_action)
         self.assertEqual(third_prediction.gesture, "thumbs_down")
+        self.assertEqual(third_prediction.state, "gesture_confirmed")
+        self.assertTrue(third_prediction.emit_action)
+
+    def test_pinch_click_needs_fewer_stable_frames(self) -> None:
+        coords = make_coords()
+        coords[4] = (0.515, 0.60, 0.0)
+        coords[8] = (0.52, 0.61, 0.0)
+
+        first_prediction = self.engine.classify(HandLandmarks(coords))
+        second_prediction = self.engine.classify(HandLandmarks(coords))
+
+        self.assertIsNotNone(first_prediction)
+        self.assertIsNotNone(second_prediction)
+        self.assertEqual(first_prediction.gesture, "pinch")
+        self.assertEqual(first_prediction.state, "gesture_started")
+        self.assertFalse(first_prediction.emit_action)
+        self.assertEqual(second_prediction.gesture, "pinch")
+        self.assertEqual(second_prediction.state, "gesture_confirmed")
+        self.assertTrue(second_prediction.emit_action)
 
     def test_two_fingers_pose_allows_visible_thumb(self) -> None:
         coords = make_coords()
@@ -204,6 +227,38 @@ class GestureEngineTests(unittest.TestCase):
 
         self.assertIsNotNone(prediction)
         self.assertEqual(prediction.gesture, "fist")
+        self.assertEqual(prediction.state, "gesture_confirmed")
+
+    def test_fist_detects_with_less_strict_compactness(self) -> None:
+        coords = make_coords()
+        coords[4] = (0.47, 0.59, 0.0)
+        coords[8] = (0.56, 0.60, 0.0)
+        coords[12] = (0.58, 0.61, 0.0)
+        coords[16] = (0.61, 0.64, 0.0)
+        coords[20] = (0.64, 0.66, 0.0)
+
+        prediction = self.classify_repeated(coords, 2)
+
+        self.assertIsNotNone(prediction)
+        self.assertEqual(prediction.gesture, "fist")
+        self.assertEqual(prediction.state, "gesture_confirmed")
+
+    def test_confirmed_static_gesture_emits_only_once_while_held(self) -> None:
+        coords = make_coords()
+        coords[8] = (0.56, 0.64, 0.0)
+        coords[3] = (0.47, 0.61, 0.0)
+        coords[4] = (0.50, 0.62, 0.0)
+
+        first = self.engine.classify(HandLandmarks(coords))
+        second = self.engine.classify(HandLandmarks(coords))
+        third = self.engine.classify(HandLandmarks(coords))
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertIsNotNone(third)
+        self.assertFalse(first.emit_action)
+        self.assertTrue(second.emit_action)
+        self.assertFalse(third.emit_action)
 
     def test_pointer_speed_multiplier_moves_cursor_faster(self) -> None:
         slow_engine = GestureEngine(
@@ -227,6 +282,26 @@ class GestureEngineTests(unittest.TestCase):
         assert fast_target is not None
         self.assertGreater(fast_target[0], slow_target[0])
         self.assertLess(fast_target[1], slow_target[1])
+
+    def test_pointer_deadzone_filters_small_jitter(self) -> None:
+        engine = GestureEngine(
+            GestureConfig(
+                dynamic_history_size=3,
+                pointer_smoothing=0.18,
+                pointer_speed_multiplier=1.35,
+                pointer_deadzone=0.02,
+            )
+        )
+        start_coords = make_coords()
+        jitter_coords = make_coords()
+        jitter_coords[8] = (0.531, 0.611, 0.0)
+
+        first_target = engine.pointer_target(HandLandmarks(start_coords))
+        second_target = engine.pointer_target(HandLandmarks(jitter_coords))
+
+        self.assertIsNotNone(first_target)
+        self.assertIsNotNone(second_target)
+        self.assertEqual(first_target, second_target)
 
 
 if __name__ == "__main__":

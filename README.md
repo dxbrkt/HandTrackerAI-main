@@ -26,6 +26,12 @@ PYTHONPATH=src python3 -m handtracker_ai.main
 
 source .venv311/bin/activate
 PYTHONPATH=src python -m handtracker_ai.main
+
+--------------------------------------
+python3.11 -m venv .venv311
+source .venv311/bin/activate
+pip install -r requirements.txt
+
 ```
 
 ## Сборка в macOS `.app`

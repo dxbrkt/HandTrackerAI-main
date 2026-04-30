@@ -15,20 +15,26 @@ class CameraConfig:
 class GestureConfig:
     detection_confidence: float = 0.65
     tracking_confidence: float = 0.65
-    pinch_threshold: float = 0.055
+    confidence_threshold: float = 0.68
+    landmark_smoothing: float = 0.38
+    pinch_threshold: float = 0.18
     open_palm_threshold: int = 4
     fist_threshold: int = 1
     static_gesture_frames: int = 3
-    fist_gesture_frames: int = 4
-    swipe_distance_threshold: float = 0.18
-    scroll_distance_threshold: float = 0.12
+    gesture_start_frames: int = 2
+    pinch_gesture_frames: int = 2
+    fist_gesture_frames: int = 2
+    swipe_distance_threshold: float = 0.95
+    scroll_distance_threshold: float = 0.20
     scroll_history_size: int = 3
-    thumb_scroll_distance_threshold: float = 0.055
+    thumb_scroll_distance_threshold: float = 0.20
     thumb_scroll_history_size: int = 3
+    gesture_repeat_cooldown_seconds: float = 0.55
     command_cooldown_seconds: float = 0.85
     shutdown_hold_seconds: float = 2.5
-    pointer_smoothing: float = 0.35
-    pointer_speed_multiplier: float = 1.75
+    pointer_smoothing: float = 0.18
+    pointer_speed_multiplier: float = 1.35
+    pointer_deadzone: float = 0.012
     dynamic_history_size: int = 8
 
 

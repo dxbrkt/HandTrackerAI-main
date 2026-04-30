@@ -8,7 +8,9 @@ from typing import Any
 class GesturePrediction:
     gesture: str
     confidence: float
+    state: str = "gesture_confirmed"
     is_dynamic: bool = False
+    emit_action: bool = False
     debug: dict[str, Any] = field(default_factory=dict)
 
 

@@ -46,7 +46,9 @@ class HandTracker:
             )
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_frame.flags.writeable = False
         results = self._hands.process(rgb_frame)
+        rgb_frame.flags.writeable = True
 
         prediction = None
         hand_landmarks = None
@@ -72,7 +74,7 @@ class HandTracker:
     def pointer_target(self, frame_result: FrameResult):
         if frame_result.hand_landmarks is None:
             return None
-        return self._engine.pointer_target(frame_result.hand_landmarks)
+        return self._engine.pointer_target()
 
     def close(self) -> None:
         self._camera.release()
