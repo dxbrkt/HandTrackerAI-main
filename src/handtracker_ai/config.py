@@ -17,12 +17,13 @@ class GestureConfig:
     tracking_confidence: float = 0.65
     confidence_threshold: float = 0.68
     landmark_smoothing: float = 0.38
-    pinch_threshold: float = 0.18
+    pinch_threshold: float = 0.22
     open_palm_threshold: int = 4
     fist_threshold: int = 1
     static_gesture_frames: int = 3
     gesture_start_frames: int = 2
-    pinch_gesture_frames: int = 2
+    pinch_gesture_frames: int = 1
+    scroll_repeat_cooldown_seconds: float = 0.15
     fist_gesture_frames: int = 2
     swipe_distance_threshold: float = 0.95
     scroll_distance_threshold: float = 0.20

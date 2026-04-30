@@ -111,11 +111,13 @@ class GestureEngineTests(unittest.TestCase):
         self.assertIsNotNone(first_prediction)
         self.assertIsNotNone(second_prediction)
         self.assertEqual(first_prediction.gesture, "pinch")
-        self.assertEqual(first_prediction.state, "gesture_started")
-        self.assertFalse(first_prediction.emit_action)
+        # pinch_gesture_frames=1: confirmed and fires on the very first detected frame
+        self.assertEqual(first_prediction.state, "gesture_confirmed")
+        self.assertTrue(first_prediction.emit_action)
+        # second frame: still confirmed but _emitted_gesture guard suppresses re-emit
         self.assertEqual(second_prediction.gesture, "pinch")
         self.assertEqual(second_prediction.state, "gesture_confirmed")
-        self.assertTrue(second_prediction.emit_action)
+        self.assertFalse(second_prediction.emit_action)
 
     def test_two_fingers_pose_allows_visible_thumb(self) -> None:
         coords = make_coords()

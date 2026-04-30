@@ -220,8 +220,8 @@ class HandFeatureExtractor:
         thumb_spread = self._distance(thumb_tip, coords[INDEX_MCP]) / palm_scale
         thumb_ip_span = self._distance(thumb_tip, thumb_ip) / palm_scale
         return (
-            angle >= 2.0
-            and thumb_span > 0.46
-            and thumb_spread > 0.42
-            and thumb_ip_span > 0.16
+            angle >= 1.85
+            and thumb_span > 0.38
+            and thumb_spread > 0.32
+            and thumb_ip_span > 0.13
         )

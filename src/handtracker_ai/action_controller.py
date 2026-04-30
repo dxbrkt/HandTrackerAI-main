@@ -11,9 +11,15 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0
 
 
+_SCROLL_GESTURES: frozenset[str] = frozenset({
+    "two_fingers_up", "two_fingers_down", "thumb_scroll_up", "thumb_scroll_down",
+})
+
+
 @dataclass(slots=True)
 class ActionController:
     cooldown_seconds: float = 0.85
+    scroll_cooldown_seconds: float = 0.12
     shutdown_hold_seconds: float = 2.5
     volume_step: int = 6
     _last_trigger_at: dict[str, float] = field(init=False)
@@ -56,7 +62,8 @@ class ActionController:
 
         self._pending_shutdown_since = None
         last_trigger = self._last_trigger_at.get(gesture, 0.0)
-        if now - last_trigger < self.cooldown_seconds:
+        limit = self.scroll_cooldown_seconds if gesture in _SCROLL_GESTURES else self.cooldown_seconds
+        if now - last_trigger < limit:
             return None
 
         action_map = {

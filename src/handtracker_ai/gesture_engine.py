@@ -169,18 +169,19 @@ class GestureEngine:
         if dynamic is not None:
             return dynamic
 
-        candidates = [
+        # Priority order (specific → general): first candidate above threshold wins.
+        # This prevents ambiguous poses from being won by whichever has slightly higher confidence.
+        for candidate in [
             self._pinch_candidate(features),
             self._middle_finger_candidate(features),
-            self._thumbs_down_candidate(features),
             self._thumbs_up_candidate(features),
+            self._thumbs_down_candidate(features),
             self._fist_candidate(features),
             self._open_palm_candidate(features),
-        ]
-        valid_candidates = [candidate for candidate in candidates if candidate is not None]
-        if not valid_candidates:
-            return None
-        return max(valid_candidates, key=lambda item: item.confidence)
+        ]:
+            if candidate is not None and candidate.confidence >= self.config.confidence_threshold:
+                return candidate
+        return None
 
     def _classify_dynamic_gesture(self, features: HandFeatures) -> GesturePrediction | None:
         if (
@@ -224,16 +225,16 @@ class GestureEngine:
         return None
 
     def _pinch_candidate(self, features: HandFeatures) -> GesturePrediction | None:
+        if not features.pinch_ready:
+            return None
+        # Index must be bent toward thumb — a fully extended index can't touch the thumb tip
+        if features.finger_extended["index"]:
+            return None
+        pinch_margin = max(0.0, self.config.pinch_threshold - features.pinch_distance)
         curled_others = sum(
             1 for name in ("middle", "ring", "pinky") if not features.finger_extended[name]
         )
-        if not features.pinch_ready or curled_others < 1:
-            return None
-        pinch_margin = max(0.0, self.config.pinch_threshold - features.pinch_distance)
-        confidence = min(
-            0.99,
-            0.84 + pinch_margin * 0.8 + curled_others * 0.015,
-        )
+        confidence = min(0.99, 0.86 + pinch_margin * 1.2 + curled_others * 0.013)
         return GesturePrediction(
             gesture="pinch",
             confidence=confidence,
@@ -244,35 +245,43 @@ class GestureEngine:
         )
 
     def _thumbs_up_candidate(self, features: HandFeatures) -> GesturePrediction | None:
+        # Pinch-like poses must not fire as thumbs
+        if features.pinch_ready:
+            return None
         other_extended = sum(
             1 for name in ("index", "middle", "ring", "pinky") if features.finger_extended[name]
         )
-        thumb_raise = (features.coords[2][1] - features.thumb_tip[1]) / features.palm_scale
+        # Use palm_center as Y reference — more stable than thumb MCP (coords[2])
+        # In image coords Y=0 is top, so thumb_raise > 0 means thumb tip is above palm center
+        thumb_raise = (features.palm_center[1] - features.thumb_tip[1]) / features.palm_scale
         if (
             features.finger_extended["thumb"]
-            and other_extended == 0
-            and thumb_raise > 0.42
+            and other_extended <= 1          # allow one noisy finger
+            and thumb_raise > 0.35
         ):
             return GesturePrediction(
                 gesture="thumbs_up",
-                confidence=min(0.97, 0.7 + thumb_raise * 0.22),
+                confidence=min(0.97, 0.72 + thumb_raise * 0.20),
                 debug={"thumb_raise": thumb_raise},
             )
         return None
 
     def _thumbs_down_candidate(self, features: HandFeatures) -> GesturePrediction | None:
+        if features.pinch_ready:
+            return None
         other_extended = sum(
             1 for name in ("index", "middle", "ring", "pinky") if features.finger_extended[name]
         )
-        thumb_drop = (features.thumb_tip[1] - features.coords[2][1]) / features.palm_scale
+        # Use palm_center as Y reference (positive = thumb below palm center = pointing down)
+        thumb_drop = (features.thumb_tip[1] - features.palm_center[1]) / features.palm_scale
         if (
             features.finger_extended["thumb"]
             and other_extended <= 1
-            and thumb_drop > 0.34
+            and thumb_drop > 0.25
         ):
             return GesturePrediction(
                 gesture="thumbs_down",
-                confidence=min(0.97, 0.7 + thumb_drop * 0.2),
+                confidence=min(0.97, 0.72 + thumb_drop * 0.20),
                 debug={"thumb_drop": thumb_drop},
             )
         return None
@@ -294,6 +303,9 @@ class GestureEngine:
         return None
 
     def _open_palm_candidate(self, features: HandFeatures) -> GesturePrediction | None:
+        # Pinch-ready poses must not fire as open_palm (prevents overlap on transition)
+        if features.pinch_ready:
+            return None
         if features.extended_finger_count < self.config.open_palm_threshold:
             return None
         confidence = min(0.97, 0.74 + features.openness * 0.08)
@@ -316,6 +328,10 @@ class GestureEngine:
         thumb_tucked = not features.finger_extended["thumb"] or (
             self._distance(features.thumb_tip, features.palm_center) / features.palm_scale < 0.92
         )
+        # If thumb is pointing clearly up or down, this is a thumbs gesture — not a fist
+        thumb_vertical = (features.thumb_tip[1] - features.palm_center[1]) / features.palm_scale
+        if abs(thumb_vertical) > 0.28:
+            return None
         if curled_fingers >= 4 and thumb_tucked and curled_to_palm:
             confidence = min(
                 0.96,
@@ -365,17 +381,27 @@ class GestureEngine:
         if gesture in {"swipe_left", "swipe_right", "two_fingers_up", "two_fingers_down", "thumb_scroll_up", "thumb_scroll_down"}:
             return 1
         if gesture == "pinch":
-            return max(self.config.gesture_start_frames, self.config.pinch_gesture_frames)
+            # Use pinch_gesture_frames directly — no extra gesture_start_frames wait
+            return self.config.pinch_gesture_frames
         if gesture == "fist":
             return max(self.config.gesture_start_frames, self.config.fist_gesture_frames)
         return max(self.config.gesture_start_frames + 1, self.config.static_gesture_frames)
 
+    _SCROLL_GESTURES: frozenset[str] = frozenset({
+        "two_fingers_up", "two_fingers_down", "thumb_scroll_up", "thumb_scroll_down",
+    })
+
     def _should_emit(self, gesture: str) -> bool:
         if gesture == "open_palm":
             return True
+        last_emit_at = self._last_emit_at.get(gesture, 0.0)
+        # Scroll gestures repeat on every detected motion — rate-limited only by cooldown,
+        # not by _emitted_gesture (which would block after the very first fire).
+        if gesture in self._SCROLL_GESTURES:
+            return (time.monotonic() - last_emit_at) >= self.config.scroll_repeat_cooldown_seconds
+        # Static gestures: emit once per hold, require release before re-firing
         if self._emitted_gesture == gesture:
             return False
-        last_emit_at = self._last_emit_at.get(gesture, 0.0)
         return (time.monotonic() - last_emit_at) >= self.config.gesture_repeat_cooldown_seconds
 
     @staticmethod
